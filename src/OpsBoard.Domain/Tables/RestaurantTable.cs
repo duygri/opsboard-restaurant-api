@@ -21,4 +21,16 @@ public sealed class RestaurantTable
     public TableStatus Status { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
+
+    public void MarkOccupied(DateTimeOffset updatedAtUtc)
+    {
+        Status = TableStatus.Occupied;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
+    public void MarkAvailable(DateTimeOffset updatedAtUtc)
+    {
+        Status = TableStatus.Available;
+        UpdatedAtUtc = updatedAtUtc;
+    }
 }
