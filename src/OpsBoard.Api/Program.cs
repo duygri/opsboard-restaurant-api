@@ -27,6 +27,8 @@ builder.Services.AddScoped<IUserLookup, EfUserLookup>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<AuditLogQueryService>();
 builder.Services.AddScoped<DemoDataSeeder>();
 builder.Services.AddControllers();
 builder.Services
