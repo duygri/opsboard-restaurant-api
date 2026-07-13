@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+.idea/
+.vscode/
+.appdata/
+.localappdata/
+TestResults/
+*.user
+*.suo
