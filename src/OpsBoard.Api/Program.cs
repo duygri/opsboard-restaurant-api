@@ -33,6 +33,7 @@ builder.Services.AddScoped<AuditLogQueryService>();
 builder.Services.AddScoped<MenuQueryService>();
 builder.Services.AddScoped<TableQueryService>();
 builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<ReportingService>();
 builder.Services.AddScoped<DemoDataSeeder>();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
