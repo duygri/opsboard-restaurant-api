@@ -1,4 +1,13 @@
+using Microsoft.EntityFrameworkCore;
+using OpsBoard.Infrastructure.Persistence;
+
 var builder = WebApplication.CreateBuilder(args);
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Host=localhost;Port=5432;Database=opsboard;Username=postgres;Password=postgres";
+
+builder.Services.AddDbContext<OpsBoardDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 var app = builder.Build();
 
