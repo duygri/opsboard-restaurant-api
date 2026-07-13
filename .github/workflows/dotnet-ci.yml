@@ -25,6 +25,13 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/OpsBoard.Client/package-lock.json
+
       - name: Restore
         run: dotnet restore OpsBoard.slnx --configfile .github/nuget.ci.config
 
@@ -33,3 +40,15 @@ jobs:
 
       - name: Test
         run: dotnet test OpsBoard.slnx --configuration Release --no-build --verbosity normal
+
+      - name: Install client dependencies
+        working-directory: src/OpsBoard.Client
+        run: npm ci
+
+      - name: Lint client
+        working-directory: src/OpsBoard.Client
+        run: npm run lint
+
+      - name: Build client
+        working-directory: src/OpsBoard.Client
+        run: npm run build

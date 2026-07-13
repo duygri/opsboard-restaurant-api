@@ -63,7 +63,7 @@ When the API starts in `Development`, it runs EF migrations and seeds demo data.
 | Admin | `admin@opsboard.local` | `Admin123!` |
 | Staff | `staff@opsboard.local` | `Staff123!` |
 
-## Run
+## Run Backend
 
 ```powershell
 dotnet restore OpsBoard.slnx
@@ -73,10 +73,30 @@ dotnet run --project src/OpsBoard.Api/OpsBoard.Api.csproj
 
 The checked-in `NuGet.Config` uses only `nuget.org` so fresh clones work consistently across Windows, macOS, Linux, and GitHub Actions.
 
+## Run Frontend
+
+The React client lives in `src/OpsBoard.Client`.
+
+```powershell
+cd src/OpsBoard.Client
+npm install
+npm run dev
+```
+
+The Vite dev server runs on `http://localhost:5173` and proxies `/api` to the backend at `http://localhost:5292`.
+
 ## Test
 
 ```powershell
 dotnet test tests/OpsBoard.Tests/OpsBoard.Tests.csproj --no-restore
+```
+
+Frontend checks:
+
+```powershell
+cd src/OpsBoard.Client
+npm run lint
+npm run build
 ```
 
 ## Core API
@@ -109,6 +129,8 @@ dotnet test tests/OpsBoard.Tests/OpsBoard.Tests.csproj --no-restore
 5. Log in as Admin.
 6. View daily report and recent audit logs.
 
+The frontend includes the same flow: Staff can use Floor and Orders, while Admin can also access Daily Report and Audit Logs.
+
 Order creation rules:
 
 - An order requires at least one item.
@@ -119,7 +141,6 @@ Order creation rules:
 
 ## V1 Limitations
 
-- No React frontend yet.
 - No real payment gateway.
 - No table CRUD.
 - No menu/user write endpoints in Milestone 1.
