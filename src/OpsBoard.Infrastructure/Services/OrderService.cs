@@ -94,6 +94,29 @@ public sealed class OrderService
         return ToDetail(order, table);
     }
 
+    public async Task<IReadOnlyList<OrderSummaryResponse>> GetActiveAsync(CancellationToken cancellationToken)
+    {
+        var activeOrders = await _dbContext.Orders
+            .Where(order => order.Status != OrderStatus.Paid && order.Status != OrderStatus.Cancelled)
+            .OrderBy(order => order.CreatedAtUtc)
+            .ToArrayAsync(cancellationToken);
+        var tableIds = activeOrders.Select(order => order.TableId).ToHashSet();
+        var tables = await _dbContext.RestaurantTables
+            .Where(table => tableIds.Contains(table.Id))
+            .ToDictionaryAsync(table => table.Id, cancellationToken);
+
+        return activeOrders
+            .Select(order => ToSummary(order, tables[order.TableId]))
+            .ToArray();
+    }
+
+    public async Task<OrderDetailResponse> GetByIdAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var order = await LoadOrderAsync(orderId, cancellationToken);
+        var table = await LoadTableAsync(order.TableId, cancellationToken);
+        return ToDetail(order, table);
+    }
+
     public async Task<OrderDetailResponse> UpdateStatusAsync(
         Guid orderId,
         UpdateOrderStatusRequest request,
@@ -194,5 +217,18 @@ public sealed class OrderService
                 item.UnitPriceSnapshot,
                 item.Quantity,
                 item.LineTotal)).ToArray());
+    }
+
+    private static OrderSummaryResponse ToSummary(Order order, RestaurantTable table)
+    {
+        return new OrderSummaryResponse(
+            order.Id,
+            table.Id,
+            table.Name,
+            order.Status,
+            order.Subtotal,
+            order.Total,
+            order.CreatedAtUtc,
+            order.PaidAtUtc);
     }
 }
