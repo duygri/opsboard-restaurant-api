@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using OpsBoard.Application.Abstractions;
+using OpsBoard.Infrastructure.Auth;
 using OpsBoard.Infrastructure.Persistence;
+using OpsBoard.Infrastructure.Persistence.Seed;
+using OpsBoard.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,8 +12,16 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<OpsBoardDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddSingleton<ISystemClock, SystemClock>();
+builder.Services.AddScoped<DemoDataSeeder>();
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    await ApplyMigrationsAndSeedAsync(app);
+}
 
 app.UseHttpsRedirection();
 
@@ -33,6 +45,25 @@ app.MapGet("/weatherforecast", () =>
 .WithName("GetWeatherForecast");
 
 app.Run();
+
+static async Task ApplyMigrationsAndSeedAsync(WebApplication app)
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpsBoardDbContext>();
+    var seeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+
+    try
+    {
+        await dbContext.Database.MigrateAsync();
+        await seeder.SeedAsync();
+    }
+    catch (Exception exception)
+    {
+        throw new InvalidOperationException(
+            "Failed to migrate or seed the OpsBoard database. Check the DefaultConnection string and PostgreSQL availability.",
+            exception);
+    }
+}
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
