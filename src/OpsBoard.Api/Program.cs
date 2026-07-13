@@ -1,5 +1,10 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using OpsBoard.Api.Auth;
 using OpsBoard.Application.Abstractions;
+using OpsBoard.Application.Auth;
 using OpsBoard.Infrastructure.Auth;
 using OpsBoard.Infrastructure.Persistence;
 using OpsBoard.Infrastructure.Persistence.Seed;
@@ -12,9 +17,47 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<OpsBoardDbContext>(options =>
     options.UseNpgsql(connectionString));
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<ISystemClock, SystemClock>();
+builder.Services.AddScoped<IUserLookup, EfUserLookup>();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<DemoDataSeeder>();
+builder.Services.AddControllers();
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AuthorizationPolicies.OrdersManage, policy =>
+        policy.RequireRole("Admin", "Staff"));
+    options.AddPolicy(AuthorizationPolicies.MenuManage, policy =>
+        policy.RequireRole("Admin"));
+    options.AddPolicy(AuthorizationPolicies.UsersManage, policy =>
+        policy.RequireRole("Admin"));
+    options.AddPolicy(AuthorizationPolicies.ReportsView, policy =>
+        policy.RequireRole("Admin"));
+    options.AddPolicy(AuthorizationPolicies.AuditLogsView, policy =>
+        policy.RequireRole("Admin"));
+});
 
 var app = builder.Build();
 
@@ -23,7 +66,14 @@ if (app.Environment.IsDevelopment())
     await ApplyMigrationsAndSeedAsync(app);
 }
 
+if (!app.Environment.IsEnvironment("Testing"))
+{
 app.UseHttpsRedirection();
+}
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers();
 
 var summaries = new[]
 {
@@ -69,3 +119,5 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
+public partial class Program;
