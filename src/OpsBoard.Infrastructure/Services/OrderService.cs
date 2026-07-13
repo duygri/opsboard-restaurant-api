@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using OpsBoard.Application.Abstractions;
 using OpsBoard.Application.Common;
 using OpsBoard.Application.Orders;
@@ -35,63 +36,66 @@ public sealed class OrderService
             throw AppException.Unauthorized();
         }
 
-        if (request.Items.Count == 0)
+        return await ExecuteInTransactionIfSupportedAsync(async () =>
         {
-            throw AppException.BadRequest("An order must contain at least one order item.");
-        }
+            if (request.Items.Count == 0)
+            {
+                throw AppException.BadRequest("An order must contain at least one order item.");
+            }
 
-        if (request.Items.Any(item => item.Quantity <= 0))
-        {
-            throw AppException.BadRequest("Order item quantity must be positive.");
-        }
+            if (request.Items.Any(item => item.Quantity <= 0))
+            {
+                throw AppException.BadRequest("Order item quantity must be positive.");
+            }
 
-        var table = await _dbContext.RestaurantTables
-            .FirstOrDefaultAsync(candidate => candidate.Id == request.TableId, cancellationToken)
-            ?? throw AppException.NotFound("Table was not found.");
+            var table = await _dbContext.RestaurantTables
+                .FirstOrDefaultAsync(candidate => candidate.Id == request.TableId, cancellationToken)
+                ?? throw AppException.NotFound("Table was not found.");
 
-        var hasActiveOrder = await _dbContext.Orders.AnyAsync(
-            order => order.TableId == request.TableId
-                && order.Status != OrderStatus.Paid
-                && order.Status != OrderStatus.Cancelled,
-            cancellationToken);
+            var hasActiveOrder = await _dbContext.Orders.AnyAsync(
+                order => order.TableId == request.TableId
+                    && order.Status != OrderStatus.Paid
+                    && order.Status != OrderStatus.Cancelled,
+                cancellationToken);
 
-        if (table.Status != TableStatus.Available || hasActiveOrder)
-        {
-            throw AppException.Conflict("Table is not available.", ErrorCodes.TableUnavailable);
-        }
+            if (table.Status != TableStatus.Available || hasActiveOrder)
+            {
+                throw AppException.Conflict("Table is not available.", ErrorCodes.TableUnavailable);
+            }
 
-        var menuItemIds = request.Items.Select(item => item.MenuItemId).ToHashSet();
-        var menuItems = await _dbContext.MenuItems
-            .Where(item => menuItemIds.Contains(item.Id) && item.IsAvailable)
-            .ToDictionaryAsync(item => item.Id, cancellationToken);
+            var menuItemIds = request.Items.Select(item => item.MenuItemId).ToHashSet();
+            var menuItems = await _dbContext.MenuItems
+                .Where(item => menuItemIds.Contains(item.Id) && item.IsAvailable)
+                .ToDictionaryAsync(item => item.Id, cancellationToken);
 
-        if (menuItems.Count != menuItemIds.Count)
-        {
-            throw AppException.BadRequest("One or more menu items are unavailable.");
-        }
+            if (menuItems.Count != menuItemIds.Count)
+            {
+                throw AppException.BadRequest("One or more menu items are unavailable.");
+            }
 
-        var drafts = request.Items.Select(item =>
-        {
-            var menuItem = menuItems[item.MenuItemId];
-            return new OrderItemDraft(menuItem.Id, menuItem.Name, menuItem.Price, item.Quantity);
-        }).ToArray();
+            var drafts = request.Items.Select(item =>
+            {
+                var menuItem = menuItems[item.MenuItemId];
+                return new OrderItemDraft(menuItem.Id, menuItem.Name, menuItem.Price, item.Quantity);
+            }).ToArray();
 
-        var order = Order.Create(table.Id, _currentUser.UserId.Value, drafts, _clock.UtcNow);
-        table.MarkOccupied(_clock.UtcNow);
-        _dbContext.Orders.Add(order);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            var order = Order.Create(table.Id, _currentUser.UserId.Value, drafts, _clock.UtcNow);
+            table.MarkOccupied(_clock.UtcNow);
+            _dbContext.Orders.Add(order);
+            await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(
-            _currentUser.UserId,
-            _currentUser.FullName ?? "Unknown",
-            AuditAction.OrderCreated,
-            nameof(Order),
-            order.Id,
-            null,
-            new { order.Id, order.Status, order.Total },
-            cancellationToken);
+            await _auditService.RecordAsync(
+                _currentUser.UserId,
+                _currentUser.FullName ?? "Unknown",
+                AuditAction.OrderCreated,
+                nameof(Order),
+                order.Id,
+                null,
+                new { order.Id, order.Status, order.Total },
+                cancellationToken);
 
-        return ToDetail(order, table);
+            return ToDetail(order, table);
+        }, cancellationToken);
     }
 
     public async Task<IReadOnlyList<OrderSummaryResponse>> GetActiveAsync(CancellationToken cancellationToken)
@@ -122,66 +126,99 @@ public sealed class OrderService
         UpdateOrderStatusRequest request,
         CancellationToken cancellationToken)
     {
-        var order = await LoadOrderAsync(orderId, cancellationToken);
-        var table = await LoadTableAsync(order.TableId, cancellationToken);
-        var before = new { order.Id, order.Status };
-
-        try
+        return await ExecuteInTransactionIfSupportedAsync(async () =>
         {
-            order.ChangeStatus(request.TargetStatus, _clock.UtcNow);
-        }
-        catch (InvalidOperationException exception)
-        {
-            throw AppException.Conflict(exception.Message, ErrorCodes.InvalidOrderTransition);
-        }
+            var order = await LoadOrderAsync(orderId, cancellationToken);
+            var table = await LoadTableAsync(order.TableId, cancellationToken);
+            var before = new { order.Id, order.Status };
 
-        if (order.Status == OrderStatus.Paid)
-        {
-            table.MarkAvailable(_clock.UtcNow);
-        }
+            try
+            {
+                order.ChangeStatus(request.TargetStatus, _clock.UtcNow);
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw AppException.Conflict(exception.Message, ErrorCodes.InvalidOrderTransition);
+            }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync(
-            _currentUser.UserId,
-            _currentUser.FullName ?? "Unknown",
-            AuditAction.OrderStatusChanged,
-            nameof(Order),
-            order.Id,
-            before,
-            new { order.Id, order.Status },
-            cancellationToken);
+            if (order.Status == OrderStatus.Paid)
+            {
+                table.MarkAvailable(_clock.UtcNow);
+            }
 
-        return ToDetail(order, table);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditService.RecordAsync(
+                _currentUser.UserId,
+                _currentUser.FullName ?? "Unknown",
+                AuditAction.OrderStatusChanged,
+                nameof(Order),
+                order.Id,
+                before,
+                new { order.Id, order.Status },
+                cancellationToken);
+
+            return ToDetail(order, table);
+        }, cancellationToken);
     }
 
     public async Task<OrderDetailResponse> CancelAsync(Guid orderId, CancellationToken cancellationToken)
     {
-        var order = await LoadOrderAsync(orderId, cancellationToken);
-        var table = await LoadTableAsync(order.TableId, cancellationToken);
-        var before = new { order.Id, order.Status };
+        return await ExecuteInTransactionIfSupportedAsync(async () =>
+        {
+            var order = await LoadOrderAsync(orderId, cancellationToken);
+            var table = await LoadTableAsync(order.TableId, cancellationToken);
+            var before = new { order.Id, order.Status };
+
+            try
+            {
+                order.Cancel(_clock.UtcNow);
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw AppException.Conflict(exception.Message, ErrorCodes.InvalidOrderTransition);
+            }
+
+            table.MarkAvailable(_clock.UtcNow);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditService.RecordAsync(
+                _currentUser.UserId,
+                _currentUser.FullName ?? "Unknown",
+                AuditAction.OrderCancelled,
+                nameof(Order),
+                order.Id,
+                before,
+                new { order.Id, order.Status },
+                cancellationToken);
+
+            return ToDetail(order, table);
+        }, cancellationToken);
+    }
+
+    private async Task<T> ExecuteInTransactionIfSupportedAsync<T>(
+        Func<Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        var transaction = _dbContext.Database.IsRelational()
+            ? await _dbContext.Database.BeginTransactionAsync(cancellationToken)
+            : null;
 
         try
         {
-            order.Cancel(_clock.UtcNow);
+            var result = await operation();
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            return result;
         }
-        catch (InvalidOperationException exception)
+        finally
         {
-            throw AppException.Conflict(exception.Message, ErrorCodes.InvalidOrderTransition);
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
         }
-
-        table.MarkAvailable(_clock.UtcNow);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync(
-            _currentUser.UserId,
-            _currentUser.FullName ?? "Unknown",
-            AuditAction.OrderCancelled,
-            nameof(Order),
-            order.Id,
-            before,
-            new { order.Id, order.Status },
-            cancellationToken);
-
-        return ToDetail(order, table);
     }
 
     private async Task<Order> LoadOrderAsync(Guid orderId, CancellationToken cancellationToken)

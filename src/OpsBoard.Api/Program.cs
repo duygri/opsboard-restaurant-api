@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -56,6 +57,25 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var userIdValue = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!Guid.TryParse(userIdValue, out var userId))
+                {
+                    context.Fail("Token does not contain a valid user id.");
+                    return;
+                }
+
+                var userLookup = context.HttpContext.RequestServices.GetRequiredService<IUserLookup>();
+                var activeUser = await userLookup.FindActiveByIdAsync(userId, context.HttpContext.RequestAborted);
+                if (activeUser is null)
+                {
+                    context.Fail("User is inactive or no longer exists.");
+                }
+            }
+        };
     });
 builder.Services.AddAuthorization(options =>
 {
@@ -88,25 +108,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
 app.Run();
 
 static async Task ApplyMigrationsAndSeedAsync(WebApplication app)
@@ -126,11 +127,6 @@ static async Task ApplyMigrationsAndSeedAsync(WebApplication app)
             "Failed to migrate or seed the OpsBoard database. Check the DefaultConnection string and PostgreSQL availability.",
             exception);
     }
-}
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
 
 public partial class Program;

@@ -66,12 +66,12 @@ When the API starts in `Development`, it runs EF migrations and seeds demo data.
 ## Run
 
 ```powershell
-dotnet restore OpsBoard.slnx --configfile NuGet.Config --ignore-failed-sources
+dotnet restore OpsBoard.slnx
 dotnet build OpsBoard.slnx --no-restore
 dotnet run --project src/OpsBoard.Api/OpsBoard.Api.csproj
 ```
 
-If your NuGet setup is normal, plain `dotnet restore OpsBoard.slnx` is enough. The checked-in `NuGet.Config` exists so this project can also restore in locked-down/offline-ish environments.
+The checked-in `NuGet.Config` uses only `nuget.org` so fresh clones work consistently across Windows, macOS, Linux, and GitHub Actions.
 
 ## Test
 
