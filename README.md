@@ -1,5 +1,7 @@
 # OpsBoard
 
+[![.NET CI](https://github.com/duygri/opsboard-restaurant-api/actions/workflows/dotnet-ci.yml/badge.svg)](https://github.com/duygri/opsboard-restaurant-api/actions/workflows/dotnet-ci.yml)
+
 OpsBoard is a backend-focused restaurant operations dashboard built as a portfolio project. It is not a generic CRUD demo: the main story is staff creating dine-in orders, moving them through a kitchen workflow, marking payment, and letting an admin inspect revenue and audit logs.
 
 ## What It Shows
