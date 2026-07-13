@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpsBoard.Api.Auth;
+using OpsBoard.Api.Middleware;
 using OpsBoard.Application.Abstractions;
 using OpsBoard.Application.Auth;
 using OpsBoard.Infrastructure.Auth;
@@ -79,9 +80,10 @@ if (app.Environment.IsDevelopment())
 
 if (!app.Environment.IsEnvironment("Testing"))
 {
-app.UseHttpsRedirection();
+    app.UseHttpsRedirection();
 }
 
+app.UseMiddleware<ExceptionMappingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
