@@ -96,6 +96,7 @@ Frontend checks:
 ```powershell
 cd src/OpsBoard.Client
 npm run lint
+npm test
 npm run build
 ```
 

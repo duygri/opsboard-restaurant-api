@@ -49,6 +49,10 @@ jobs:
         working-directory: src/OpsBoard.Client
         run: npm run lint
 
+      - name: Test client
+        working-directory: src/OpsBoard.Client
+        run: npm test
+
       - name: Build client
         working-directory: src/OpsBoard.Client
         run: npm run build
