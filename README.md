@@ -4,6 +4,21 @@
 
 OpsBoard is a backend-focused restaurant operations dashboard built as a portfolio project. It is not a generic CRUD demo: the main story is staff creating dine-in orders, moving them through a kitchen workflow, marking payment, and letting an admin inspect revenue and audit logs.
 
+![OpsBoard login screen](docs/assets/opsboard-login.png)
+
+## Portfolio Snapshot
+
+- Complete vertical slice: login, table selection, order creation, kitchen queue, payment, reporting, and audit review.
+- Backend-first architecture with thin controllers, service orchestration, EF Core persistence, and domain rules.
+- Practical RBAC: Staff runs operations; Admin reviews revenue and audit logs.
+- Live-ish frontend queue with 10-second polling instead of unnecessary WebSocket complexity.
+- CI verifies .NET build/test plus frontend lint/test/build.
+
+Detailed docs:
+
+- [Demo Script](docs/demo-script.md)
+- [Architecture Notes](docs/architecture-notes.md)
+
 ## What It Shows
 
 - ASP.NET Core Web API with JWT authentication.
@@ -13,6 +28,7 @@ OpsBoard is a backend-focused restaurant operations dashboard built as a portfol
 - Audit logging for important order actions.
 - Daily revenue reporting in `Asia/Ho_Chi_Minh`.
 - Backend tests for domain rules, services, authorization, and API workflows.
+- React/Vite client for the core Staff and Admin demo flow.
 
 ## Architecture
 
